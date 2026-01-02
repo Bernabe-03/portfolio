@@ -67,30 +67,47 @@ class ContactController {
             // Créer le contact dans la base de données
             const contact = new Contact(contactData);
             await contact.save();
-
+            
             // Envoyer l'email
             try {
                 const emailResult = await emailService.sendContactEmail(contactData);
                 
                 // Mettre à jour le contact avec l'ID de l'email
-                contact.emailSent = true;
-                contact.emailMessageId = emailResult.messageId;
+                contact.emailSent = emailResult.success;
+                contact.emailMessageId = emailResult.messageId || emailResult.simulated ? `simulated-${Date.now()}` : null;
+                contact.emailSimulated = emailResult.simulated || false;
                 await contact.save();
 
-                console.log(`✅ Contact saved and email sent: ${contact._id}`);
+                console.log(`✅ Contact saved - Email sent: ${contact.emailSent}, Simulated: ${contact.emailSimulated}`);
 
-                return res.status(201).json({
-                    success: true,
-                    message: 'Message envoyé avec succès ! Nous vous répondrons dans les plus brefs délais.',
-                    data: {
-                        id: contact._id,
-                        name: contact.name,
-                        email: contact.email,
-                        subject: contact.subject,
-                        timestamp: contact.createdAt
-                    }
-                });
-
+                // Réponse adaptée
+                if (emailResult.simulated) {
+                    return res.status(201).json({
+                        success: true,
+                        message: 'Message reçu et enregistré. L\'email n\'a pas pu être envoyé (mode simulation).',
+                        simulated: true,
+                        data: {
+                            id: contact._id,
+                            name: contact.name,
+                            email: contact.email,
+                            subject: contact.subject,
+                            timestamp: contact.createdAt
+                        }
+                    });
+                } else {
+                    return res.status(201).json({
+                        success: true,
+                        message: 'Message envoyé avec succès ! Nous vous répondrons dans les plus brefs délais.',
+                        data: {
+                            id: contact._id,
+                            name: contact.name,
+                            email: contact.email,
+                            subject: contact.subject,
+                            timestamp: contact.createdAt
+                        }
+                    });
+                }
+                
             } catch (emailError) {
                 console.error('❌ Email sending failed, but contact saved:', emailError);
                 
